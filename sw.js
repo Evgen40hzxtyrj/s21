@@ -1,6 +1,6 @@
 ﻿// Офлайн-кеш: после первого открытия приложение работает без интернета.
 // Меняете файлы — увеличьте номер версии, чтобы телефон подтянул новое.
-const VERSION = "s21-v2";
+const VERSION = "s21-v3";
 const FILES = ["./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"];
 

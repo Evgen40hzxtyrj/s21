@@ -194,10 +194,11 @@ function buildXlsx(secIdxs) {
   return zipStore(files);
 }
 
-async function deliver(blob, filename) {
-  try {
+// how: 'share' — меню «Отправить», 'save' — сразу в «Загрузки» (на телефоне, откуда файл можно взять вручную)
+async function deliver(blob, filename, how = 'share') {
+  if (how !== 'save') try {
     const file = new File([blob], filename, {type: blob.type});
-    if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file], title: filename}); return 'shared'; }
+    if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file]}); return 'shared'; }
   } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
@@ -442,20 +443,22 @@ function renderExport() {
     <div class="form"><div class="muted" style="margin:0 2px 10px">Отметьте разделы — каждый попадёт на отдельный лист.</div>
       ${db.sections.map((s, i) => `<label class="chk"><input type="checkbox" data-i="${i}"${checked.has(i) ? ' checked' : ''}><span>${esc(s.name)} <span class="muted">· ${s.people.length}</span></span></label>`).join('')}
       <div style="display:flex;gap:8px;margin-top:6px"><button id="b-all" style="flex:1">Выбрать все</button><button id="b-none" style="flex:1">Снять все</button></div></div>
-    <div class="actionbar"><button class="primary" id="b-go">Создать Excel и отправить</button></div></div>`;
+    <div class="actionbar"><button class="primary" id="b-go">Сохранить в «Загрузки»</button><button class="accent" id="b-send">Отправить…</button></div></div>`;
   document.getElementById('b-back').onclick = back;
   const sync = () => { checked.clear(); document.querySelectorAll('[data-i]').forEach((c) => c.checked && checked.add(+c.dataset.i)); };
   document.querySelectorAll('[data-i]').forEach((c) => c.onchange = sync);
   document.getElementById('b-all').onclick = () => { document.querySelectorAll('[data-i]').forEach((c) => c.checked = true); sync(); };
   document.getElementById('b-none').onclick = () => { document.querySelectorAll('[data-i]').forEach((c) => c.checked = false); sync(); };
-  document.getElementById('b-go').onclick = async () => {
+  const run = async (how) => {
     sync(); if (!checked.size) { toast('Отметьте хотя бы один раздел'); return; }
     const idx = [...checked].sort((a, b) => a - b), d = new Date(), p = (n) => String(n).padStart(2, '0');
     const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
     const fname = (idx.length === 1 ? db.sections[idx[0]].name.replace(/[\\/:*?"<>|]+/g, ' ').trim() : 'S21_экспорт') + `_${stamp}.xlsx`;
-    try { const r = await deliver(buildXlsx(idx), fname); if (r !== 'cancelled') toast(r === 'shared' ? 'Файл отправлен' : 'Файл сохранён в «Загрузки»'); }
+    try { const r = await deliver(buildXlsx(idx), fname, how); if (r !== 'cancelled') toast(r === 'shared' ? 'Файл отправлен' : `Файл «${fname}» сохранён в «Загрузки»`, 4500); }
     catch (e) { alertBox('Ошибка', 'Не удалось создать файл: ' + e.message); }
   };
+  document.getElementById('b-go').onclick = () => run('save');
+  document.getElementById('b-send').onclick = () => run('share');
 }
 
 /* ───────── резервная копия / перенос ───────── */
@@ -465,7 +468,8 @@ function renderBackup() {
     <div class="form">
       <div class="card"><b>Сейчас в телефоне</b><div class="kv">Разделов: <span>${db.sections.length}</span> · людей: <span>${countPeople()}</span></div></div>
       <div class="sec-title">Сохранить</div>
-      <button id="b-save" class="primary" style="width:100%">⬆ Сохранить копию данных (s21_data.json)</button>
+      <button id="b-save" class="primary" style="width:100%">⬆ Сохранить копию в «Загрузки» (s21_data.json)</button>
+      <button id="b-send" style="width:100%;margin-top:8px">📤 Отправить копию…</button>
       <div class="muted" style="margin:6px 2px 0;font-size:13px">Файл можно отправить в мессенджер или облако и положить рядом с программой на компьютере.</div>
       <div class="sec-title">Загрузить</div>
       <button id="b-load" style="width:100%">⬇ Загрузить данные из файла…</button>
@@ -474,10 +478,12 @@ function renderBackup() {
       ${hasPrev ? '<button id="b-undo" style="width:100%;margin-top:12px">↩ Вернуть данные, бывшие до загрузки</button>' : ''}
     </div></div>`;
   document.getElementById('b-back').onclick = back;
-  document.getElementById('b-save').onclick = async () => {
+  const saveCopy = async (how) => {
     const blob = new Blob([JSON.stringify(db, null, 1)], {type: 'application/json'});
-    const r = await deliver(blob, 's21_data.json'); if (r !== 'cancelled') toast(r === 'shared' ? 'Копия отправлена' : 'Копия сохранена в «Загрузки»');
+    const r = await deliver(blob, 's21_data.json', how); if (r !== 'cancelled') toast(r === 'shared' ? 'Копия отправлена' : 'Копия сохранена в «Загрузки»', 4000);
   };
+  document.getElementById('b-save').onclick = () => saveCopy('save');
+  document.getElementById('b-send').onclick = () => saveCopy('share');
   const file = document.getElementById('file');
   document.getElementById('b-load').onclick = () => file.click();
   file.onchange = async () => {
